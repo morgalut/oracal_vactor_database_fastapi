@@ -2,13 +2,13 @@ import logging
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.status import HTTP_200_OK
 
 from app.router.upsert import router as upsert_router
 from app.router.search import router as search_router
 from app.router.health import router as health_router
-from app.config.settings import log_loaded_settings  # ✅ Config print + logging
+from app.config.settings import log_loaded_settings  # ✅ Print + log env
 
 # --- Logging setup ---
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +25,6 @@ app = FastAPI(
 
 # --- CORS Configuration ---
 def get_allowed_origins() -> list[str]:
-    """Read allowed CORS origins from environment or default to wildcard."""
     origins = os.getenv("ALLOWED_ORIGINS", "*")
     return origins.split(",") if origins != "*" else ["*"]
 
@@ -40,12 +39,24 @@ app.add_middleware(
 # --- Routers ---
 app.include_router(upsert_router, prefix="/vector", tags=["Vector Upsert"])
 app.include_router(search_router, prefix="/vector", tags=["Vector Search"])
-app.include_router(health_router, tags=["System"])  # ✅ Already contains /health
+app.include_router(health_router, tags=["System"])
+
+# --- Optional root route ---
+@app.get("/", tags=["System"])
+def root():
+    return {
+        "message": "✅ Oracle Vector API is running. Use /docs for Swagger UI or /health for DB check."
+    }
+
+# --- Optional: Redirect to Swagger UI instead ---
+# @app.get("/", include_in_schema=False)
+# def redirect_to_docs():
+#     return RedirectResponse(url="/docs")
 
 # --- Startup / Shutdown Lifecycle Hooks ---
 @app.on_event("startup")
 async def startup_event():
-    log_loaded_settings()  # ✅ Print & log env + DB config
+    log_loaded_settings()
     logger.info("🚀 Oracle Vector API started successfully.")
 
 @app.on_event("shutdown")

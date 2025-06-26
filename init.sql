@@ -1,10 +1,10 @@
--- Connect to PDB
+-- Connect to pluggable database
 ALTER SESSION SET CONTAINER = FREEPDB1;
 
--- Info log
+-- === Log user creation ===
 PROMPT === Creating user app_user in FREEPDB1 ===
 
--- Create user safely
+-- Create app_user if not exists
 BEGIN
   EXECUTE IMMEDIATE 'CREATE USER app_user IDENTIFIED BY "AppPassword123"';
 EXCEPTION
@@ -15,39 +15,42 @@ EXCEPTION
 END;
 /
 
--- Grant permissions
+-- Grant roles and quotas
 BEGIN
   EXECUTE IMMEDIATE 'GRANT CONNECT, RESOURCE TO app_user';
   EXECUTE IMMEDIATE 'ALTER USER app_user DEFAULT TABLESPACE USERS QUOTA UNLIMITED ON USERS';
 EXCEPTION
   WHEN OTHERS THEN
-    NULL; -- Permissions may already exist
+    NULL; -- skip if already granted
 END;
 /
 
--- Use app_user schema
+-- Set schema to app_user
 ALTER SESSION SET CURRENT_SCHEMA = app_user;
 
-PROMPT === Creating documents_vectors table ===
+PROMPT === Dropping existing documents_vectors table if exists ===
 
 -- Drop table if exists
 BEGIN
   EXECUTE IMMEDIATE 'DROP TABLE documents_vectors';
 EXCEPTION
   WHEN OTHERS THEN
-    IF SQLCODE != -942 THEN -- -942 = table or view does not exist
+    IF SQLCODE != -942 THEN -- table does not exist
       RAISE;
     END IF;
 END;
 /
 
--- Create table with fallback BLOB vector type
+PROMPT === Creating documents_vectors table ===
+
+-- ✅ Create a valid schema compatible with LangChain and Oracle
 BEGIN
   EXECUTE IMMEDIATE '
     CREATE TABLE documents_vectors (
       id VARCHAR2(100) PRIMARY KEY,
       text CLOB NOT NULL,
-      vector BLOB,
+      embedding CLOB, -- Use BLOB to store binary vector data
+      metadata CLOB,  -- Optional: store metadata (as JSON string)
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   ';

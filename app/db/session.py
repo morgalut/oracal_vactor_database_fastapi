@@ -5,43 +5,26 @@ from app.config.settings import DatabaseSettings
 logger = logging.getLogger(__name__)
 
 
-def get_db_session() -> oracledb.Connection:
-    """
-    Initializes and returns a live Oracle DB session based on config.
-    Supports both resource principal and wallet-based auth.
-    """
-    settings = DatabaseSettings()
+def get_db_session():
+    from app.config.settings import VectorSettings
+    settings = VectorSettings()
+
+    if not settings.db_dsn or not settings.db_user or not settings.oracle_password:
+        logger.error("❌ Missing Oracle DB credentials (DSN, USER, PASSWORD)")
+        raise RuntimeError("Oracle DB credentials are incomplete")
 
     try:
-        if settings.use_resource_principal:
-            logger.info("🔐 Using OCI resource principal authentication.")
-            try:
-                from ads.common.auth import ResourcePrincipalAuth
-            except ImportError as e:
-                raise ImportError("❌ 'oracle-ads' is required for resource principal auth.") from e
-
-            auth = ResourcePrincipalAuth()
-            token = auth.security_token
-
-            conn = oracledb.connect(
-                externalauth=True,
-                dsn=settings.dsn,
-                access_token=token,
-                wallet_location=settings.wallet_location
-            )
-        else:
-            logger.info(f"🔗 Connecting using wallet auth to DSN: {settings.dsn}")
-            conn = oracledb.connect(
-                dsn=settings.dsn,
-                wallet_location=settings.wallet_location
-            )
-
-        logger.info("✅ Oracle DB session established successfully.")
+        logger.info(f"🔌 Connecting to Oracle: {settings.db_dsn}")
+        conn = oracledb.connect(
+            user=settings.db_user,
+            password=settings.oracle_password,
+            dsn=settings.db_dsn
+        )
         return conn
-
     except Exception as e:
         logger.exception("❌ Failed to establish Oracle DB session.")
         raise RuntimeError("Could not establish Oracle DB connection") from e
+
 
 
 def check_db_connection() -> bool:
